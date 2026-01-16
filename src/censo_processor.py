@@ -14,18 +14,39 @@ class CensoProcessor:
         Lê o CSV ignorando as linhas iniciasis de metadados
         """
 
-        try:
-            #skiprows = 10 pula o cabeçalho de texto do PDF
-            self.df = pd.read_csv(self.caminho, header = None, skiprows=10)
-            # Garante que temos apenas o número certo de colunas
-            self.df = self.df.iloc[:, :len(COLUNAS_MAPEAMENTO)]
-            self.df.columns = COLUNAS_MAPEAMENTO
-            print(f" Arquivo {self.ano} carregado com sucesso")
+        encodings = ['utf-8', 'latin1', 'ISO-8859-1']
 
+        for enc in encodings:
+            try:
+                #skiprows = 10 pula o cabeçalho de texto do PDF
+                self.df = pd.read_csv(
+                    self.caminho,
+                    header = None, 
+                    skiprows=10,
+                    sep=',',
+                    encoding=enc,       # Tenta o encoding da vez
+                    engine='python',    # Mais lento, porém mais robusto contra erros
+                    on_bad_lines='skip' # Pula linhas quebradas sem travar o script
+                    )
 
-        except FileNotFoundError:
-            print(f"Arquivo não encontrado: {self.caminho}")
-            self.df = pd.DataFrame() # Retorna vazio para não quebrar
+                ## Se leu, precisamos garantir que não pegamos colunas vazias extras à direita
+                # O arquivo pode ter vindo com colunas a mais (ex: 20 colunas, mas só usamos 14)
+                if self.df.shape[1] > len(COLUNAS_MAPEAMENTO):
+                    self.df = self.df.iloc[:, :len(COLUNAS_MAPEAMENTO)]
+                
+                # Atribui os nomes das colunas
+                self.df.columns = COLUNAS_MAPEAMENTO
+                
+                print(f"   ✅ Arquivo {self.ano} carregado! (Enc: {enc} | Linhas: {len(self.df)})")
+                return # Sucesso!
+            
+            except Exception as e:
+                # Se der erro neste encoding, tenta o próximo silenciosamente
+                continue
+        
+        # Se chegou aqui, falhou em todos
+        print(f"   ❌ ERRO CRÍTICO: Não foi possível ler o arquivo {self.caminho}")
+        self.df = pd.DataFrame()
 
     def tratar_estrutura(self):
         """
